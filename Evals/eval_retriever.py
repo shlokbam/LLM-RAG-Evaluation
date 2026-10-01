@@ -17,8 +17,32 @@ from Evals.harness import load_goldens, summarize_by_metric, print_summary
 load_dotenv()
 
 GOLDEN_PATH = "Goldens/retriever_goldens.json"
+import re
+
 JUDGE_MODEL_NAME = "open-mistral-7b"
 THRESHOLD = 0.7
+
+
+def clean_json_output(res: str) -> str:
+    """Strips conversational preambles and markdown codeblock wrappers from LLM outputs."""
+    if not isinstance(res, str):
+        return res
+    res = res.strip()
+    match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", res)
+    if match:
+        res = match.group(1).strip()
+
+    first_brace = res.find("{")
+    last_brace = res.rfind("}")
+    first_bracket = res.find("[")
+    last_bracket = res.rfind("]")
+
+    if first_brace != -1 and last_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+        res = res[first_brace:last_brace + 1]
+    elif first_bracket != -1 and last_bracket != -1:
+        res = res[first_bracket:last_bracket + 1]
+
+    return res
 
 
 # --- Custom Mistral Model Wrapper for DeepEval ---
@@ -37,10 +61,11 @@ class MistralLLM(DeepEvalBaseLLM):
     def generate(self, prompt: str) -> str:
         for attempt in range(5):
             try:
-                return self.model.invoke(prompt).content
+                res = self.model.invoke(prompt).content
+                return clean_json_output(res)
             except Exception as e:
-                if "429" in str(e) and attempt < 4:
-                    time.sleep(2 * (attempt + 1))
+                if ("429" in str(e) or "rate" in str(e).lower()) and attempt < 4:
+                    time.sleep(3 * (attempt + 1))
                 else:
                     raise e
 
@@ -48,10 +73,10 @@ class MistralLLM(DeepEvalBaseLLM):
         for attempt in range(5):
             try:
                 res = await self.model.ainvoke(prompt)
-                return res.content
+                return clean_json_output(res.content)
             except Exception as e:
-                if "429" in str(e) and attempt < 4:
-                    await asyncio.sleep(2 * (attempt + 1))
+                if ("429" in str(e) or "rate" in str(e).lower()) and attempt < 4:
+                    await asyncio.sleep(3 * (attempt + 1))
                 else:
                     raise e
 
@@ -60,6 +85,7 @@ class MistralLLM(DeepEvalBaseLLM):
 
 
 mistral_judge_model = MistralLLM(model_name=JUDGE_MODEL_NAME)
+
 
 
 def run(retriever, retriever_name: str = "bge-m3-chroma", top_k: int = 5):
