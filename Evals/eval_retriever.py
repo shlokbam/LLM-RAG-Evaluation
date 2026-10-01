@@ -33,6 +33,24 @@ def clean_json_output(res: str) -> str:
         return res
     res = res.strip()
 
+    try:
+        parsed = repair_json(res, return_objects=True)
+        if isinstance(parsed, dict):
+            if "verdicts" in parsed and isinstance(parsed["verdicts"], list):
+                for item in parsed["verdicts"]:
+                    if isinstance(item, dict) and "reason" not in item:
+                        item["reason"] = "N/A"
+            elif "verdict" in parsed and "reason" not in parsed:
+                parsed["reason"] = "N/A"
+            return json.dumps(parsed)
+        elif isinstance(parsed, list):
+            for item in parsed:
+                if isinstance(item, dict) and "verdict" in item and "reason" not in item:
+                    item["reason"] = "N/A"
+            return json.dumps(parsed)
+    except Exception:
+        pass
+
     # Extract first complete `{ ... }` JSON object using brace stack tracking
     first_b = res.find("{")
     if first_b != -1:
@@ -51,19 +69,12 @@ def clean_json_output(res: str) -> str:
 
     try:
         parsed = repair_json(res, return_objects=True)
-        if isinstance(parsed, dict):
+        if isinstance(parsed, (dict, list)):
             return json.dumps(parsed)
-        elif isinstance(parsed, list) and len(parsed) > 0 and isinstance(parsed[0], dict):
-            return json.dumps(parsed[0])
     except Exception:
         pass
 
     return res
-
-
-
-
-
 
 
 # --- Custom Mistral Model Wrapper for DeepEval ---
@@ -79,7 +90,9 @@ class MistralLLM(DeepEvalBaseLLM):
     def load_model(self):
         return self.model
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, schema=None, *args, **kwargs) -> str:
+        if schema is not None:
+            raise TypeError("Schema not supported natively by MistralLLM")
         for attempt in range(5):
             try:
                 res = self.model.invoke(prompt).content
@@ -90,7 +103,9 @@ class MistralLLM(DeepEvalBaseLLM):
                 else:
                     raise e
 
-    async def a_generate(self, prompt: str) -> str:
+    async def a_generate(self, prompt: str, schema=None, *args, **kwargs) -> str:
+        if schema is not None:
+            raise TypeError("Schema not supported natively by MistralLLM")
         for attempt in range(5):
             try:
                 res = await self.model.ainvoke(prompt)
