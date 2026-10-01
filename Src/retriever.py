@@ -67,7 +67,7 @@ def load_store(rebuild: bool = False):
 
 
 
-def build_retriever(use_reranker: bool = False, fetch_k: int = 25, top_k: int = 7):
+def build_retriever(use_reranker: bool = False, fetch_k: int = 25, top_k: int = 6):
     if use_reranker:
         from src.reranker import build_reranking_retriever
         return build_reranking_retriever(fetch_k=fetch_k, top_k=top_k)
