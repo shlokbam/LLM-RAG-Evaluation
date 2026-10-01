@@ -168,7 +168,7 @@ def run(retriever, retriever_name: str = "bge-m3-chroma", top_k: int = 5):
     return summarize_by_metric(result)
 
 
-def run_local(use_reranker: bool = False, fetch_k: int = 25, top_k: int = 6):
+def run_local(use_reranker: bool = False, fetch_k: int = 23, top_k: int = 6):
     """Standalone convenience: build the retriever, then run."""
     retriever = build_retriever(use_reranker=use_reranker, fetch_k=fetch_k, top_k=top_k)
     name = f"bge-m3-chroma-reranked(fetch_{fetch_k}_top_{top_k})" if use_reranker else "bge-m3-chroma"
