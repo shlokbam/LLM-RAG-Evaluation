@@ -16,6 +16,42 @@ load_dotenv()
 MODEL_NAME = "open-mistral-7b"
 
 
+import json
+from json_repair import repair_json
+
+
+def clean_json_output(res: str) -> str:
+    """Strips preambles, markdown codeblocks, extra trailing blocks, and returns a single valid JSON string."""
+    if not isinstance(res, str):
+        return res
+    res = res.strip()
+
+    # Extract first complete `{ ... }` JSON object using brace stack tracking
+    first_b = res.find("{")
+    if first_b != -1:
+        stack = 0
+        end_b = -1
+        for i in range(first_b, len(res)):
+            if res[i] == "{":
+                stack += 1
+            elif res[i] == "}":
+                stack -= 1
+                if stack == 0:
+                    end_b = i
+                    break
+        if end_b != -1:
+            res = res[first_b:end_b + 1]
+
+    try:
+        parsed = repair_json(res, return_objects=True)
+        if isinstance(parsed, (dict, list)):
+            return json.dumps(parsed)
+    except Exception:
+        pass
+
+    return res
+
+
 # --- Custom Mistral Model Wrapper for DeepEval ---
 class MistralLLM(DeepEvalBaseLLM):
     def __init__(self, model_name=MODEL_NAME):
@@ -29,24 +65,29 @@ class MistralLLM(DeepEvalBaseLLM):
     def load_model(self):
         return self.model
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, schema=None, *args, **kwargs) -> str:
+        if schema:
+            prompt = f"{prompt}\n\nIMPORTANT: Respond strictly with a valid JSON object matching the requested schema without any markdown formatting or extra text."
         for attempt in range(5):
             try:
-                return self.model.invoke(prompt).content
+                res = self.model.invoke(prompt).content
+                return clean_json_output(res)
             except Exception as e:
-                if "429" in str(e) and attempt < 4:
-                    time.sleep(2 * (attempt + 1))
+                if ("429" in str(e) or "rate" in str(e).lower()) and attempt < 4:
+                    time.sleep(3 * (attempt + 1))
                 else:
                     raise e
 
-    async def a_generate(self, prompt: str) -> str:
+    async def a_generate(self, prompt: str, schema=None, *args, **kwargs) -> str:
+        if schema:
+            prompt = f"{prompt}\n\nIMPORTANT: Respond strictly with a valid JSON object matching the requested schema without any markdown formatting or extra text."
         for attempt in range(5):
             try:
                 res = await self.model.ainvoke(prompt)
-                return res.content
+                return clean_json_output(res.content)
             except Exception as e:
-                if "429" in str(e) and attempt < 4:
-                    await asyncio.sleep(2 * (attempt + 1))
+                if ("429" in str(e) or "rate" in str(e).lower()) and attempt < 4:
+                    await asyncio.sleep(3 * (attempt + 1))
                 else:
                     raise e
 
