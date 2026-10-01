@@ -59,7 +59,7 @@ def load_store(rebuild: bool = False):
 
     chunks = RecursiveCharacterTextSplitter(
         chunk_size=1000,
-        chunk_overlap=150,
+        chunk_overlap=250,
     ).split_documents(docs)
 
 

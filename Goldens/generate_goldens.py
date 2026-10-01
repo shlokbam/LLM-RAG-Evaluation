@@ -66,8 +66,8 @@ class MistralLLM(DeepEvalBaseLLM):
         return self.model
 
     def generate(self, prompt: str, schema=None, *args, **kwargs) -> str:
-        if schema:
-            prompt = f"{prompt}\n\nIMPORTANT: Respond strictly with a valid JSON object matching the requested schema without any markdown formatting or extra text."
+        if schema is not None:
+            raise TypeError("Schema not supported natively by MistralLLM")
         for attempt in range(5):
             try:
                 res = self.model.invoke(prompt).content
@@ -79,8 +79,8 @@ class MistralLLM(DeepEvalBaseLLM):
                     raise e
 
     async def a_generate(self, prompt: str, schema=None, *args, **kwargs) -> str:
-        if schema:
-            prompt = f"{prompt}\n\nIMPORTANT: Respond strictly with a valid JSON object matching the requested schema without any markdown formatting or extra text."
+        if schema is not None:
+            raise TypeError("Schema not supported natively by MistralLLM")
         for attempt in range(5):
             try:
                 res = await self.model.ainvoke(prompt)
