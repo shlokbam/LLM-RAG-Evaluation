@@ -51,8 +51,11 @@ def load_store():
     return Chroma.from_documents(chunks, embeddings, persist_directory=DB_DIR)
 
 
-def build_retriever():
-    return load_store().as_retriever(search_kwargs={"k": 5})
+def build_retriever(use_reranker: bool = False, fetch_k: int = 15, top_k: int = 5):
+    if use_reranker:
+        from src.reranker import build_reranking_retriever
+        return build_reranking_retriever(fetch_k=fetch_k, top_k=top_k)
+    return load_store().as_retriever(search_kwargs={"k": top_k})
 
 
 # 3. TRY IT ---- python src/retriever.py

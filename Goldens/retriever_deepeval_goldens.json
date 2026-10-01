@@ -1,0 +1,38 @@
+[
+  {
+    "id": "g001",
+    "query": "Assess score dist. drift to flag anomalous system behavior vs. baseline norms.",
+    "ideal_answer": "To detect anomalous behavior, compare the current week’s score distribution against a trusted baseline (e.g., last week’s distribution).  \n\n1. **Collect scores** for the period you’re monitoring.  \n2. **Plot or compute** the distribution (histogram, density, summary stats).  \n3. **Measure drift** – use statistical tests (KS test, KL‑divergence, Earth‑Mover’s Distance) or simple thresholds on key metrics (mean, variance, percentiles).  \n4. **Flag** the period when the drift exceeds the predefined tolerance.  \n\nIf the current distribution matches the baseline, the system is “normal.” A significant shift signals a potential issue and should trigger a deeper investigation.",
+    "source": "TODO-verify"
+  },
+  {
+    "id": "g002",
+    "query": "How do benchmark components correspond to sections of its research paper documentation?",
+    "ideal_answer": "A benchmark’s five core components are each spelled out in the paper that introduces it:\n\n| Benchmark component | Where it appears in the research paper |\n|---------------------|----------------------------------------|\n| **Task definition** | **Introduction / Problem Statement** – explains what the model is asked to do. |\n| **Dataset (questions + answers)** | **Dataset / Data Section** – describes the source, format, and statistics of the data. |\n| **Run configuration** | **Experimental Setup / Methodology** – details the hardware, software, prompts, and any other conditions for execution. |\n| **Scoring mechanism** | **Evaluation Metrics** – specifies how each model output is judged (e.g., exact match, BLEU, accuracy). |\n| **Aggregation mechanism** | **Results / Aggregation** – explains how individual scores are combined (e.g., averaging, weighted sum) to produce the final benchmark score. |\n\nAll of these elements are documented in the original research paper that first publishes the benchmark.",
+    "source": "TODO-verify"
+  },
+  {
+    "id": "g003",
+    "query": "How does MMLU's 14k MCQs assess LLM knowledge and reveal training‑data contamination?",
+    "ideal_answer": "MMLU (Massive Multitask Language Understanding) is a benchmark that contains ≈ 14 000 multiple‑choice questions covering 57 subjects. To gauge an LLM’s knowledge, the model is fed each question and its chosen answer is compared to the correct one; the overall accuracy (percentage of correctly answered items) serves as a proxy for how much factual and domain knowledge the model has internalised.\n\nBecause the entire question set is publicly available, later‑generation models can inadvertently ingest these items during pre‑training. When a model’s MMLU score is unusually high, it may indicate that the model has “seen” the questions (and possibly the answers) in its training data—a phenomenon known as **training‑data contamination**. Thus, the benchmark both measures knowledge and acts as a diagnostic for contamination when scores exceed what would be expected from genuine reasoning alone.",
+    "source": "TODO-verify"
+  },
+  {
+    "id": "g004",
+    "query": "Outline steps for app evals after model benchmarks & selection.",
+    "ideal_answer": "**Steps for Application Evaluations (after benchmarks & model selection)**  \n\n1. **Define target use‑cases** – List the specific applications (e.g., QA, summarization, code generation) you’ll assess.  \n2. **Set evaluation criteria** – Choose metrics that matter for each use‑case (accuracy, latency, safety, user satisfaction, cost).  \n3. **Prepare real‑world test data** – Gather or synthesize datasets that reflect the intended workload and edge cases.  \n4. **Create custom evaluation scripts** – Re‑use the “custom eval run” framework from the benchmark phase, adapting it to the new metrics and data.  \n5. **Run application‑level evals** – Execute the scripts on the selected model, capturing both quantitative scores and qualitative observations.  \n6. **Analyze results** – Compare performance against baseline expectations, identify failure modes, and assess trade‑offs (e.g., speed vs. accuracy).  \n7. **Iterate or select** – If the model meets the application requirements, finalize deployment; otherwise, tweak prompts, fine‑tune, or revisit model selection.  \n8. **Document & share** – Record the methodology, results, and recommendations for the next class discussion or repository.  ",
+    "source": "TODO-verify"
+  },
+  {
+    "id": "g005",
+    "query": "How does run_evals.py's sequential execution differ from individual test runs in version assessment?",
+    "ideal_answer": "**run_evals.py** runs every test in the eval folder **sequentially**, automatically collects all results, and produces a single report that lets you compare the new software version against the previous one.  \nWhen you run each test file individually, you only see that test’s output; you must manually combine the results and you don’t get an overall, objective assessment of the version change.",
+    "source": "TODO-verify"
+  },
+  {
+    "id": "g006",
+    "query": "List each question's summed probabilities before averaging to compute overall MC2 score.",
+    "ideal_answer": "- **Question 1:** Sum the probabilities of the correct choices (e.g., 25 % + 30 % = **60 %**).  \n- **Question 2:** Sum the probabilities of the correct choices (e.g., 10 % + 10 % + 10 % = **30 %**).  \n\nRepeat this for every question; then average the summed percentages to obtain the overall MC2 score.",
+    "source": "TODO-verify"
+  }
+]
