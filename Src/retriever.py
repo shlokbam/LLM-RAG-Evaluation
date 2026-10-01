@@ -34,9 +34,20 @@ def load_transcripts():
     return docs
 
 
+import torch
+
 # 2. BUILD ---- chunk, embed once, and keep it on disk so we don't re-embed
-def load_store():
-    embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-m3")
+def load_store(rebuild: bool = False):
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    embeddings = HuggingFaceEmbeddings(
+        model_name="BAAI/bge-m3",
+        model_kwargs={"device": device},
+        encode_kwargs={"batch_size": 32, "normalize_embeddings": True},
+    )
+
+    if rebuild and os.path.exists(DB_DIR):
+        import shutil
+        shutil.rmtree(DB_DIR)
 
     if os.path.exists(DB_DIR):
         return Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
@@ -44,11 +55,12 @@ def load_store():
     docs = load_transcripts()
 
     chunks = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=150,
+        chunk_size=1800,
+        chunk_overlap=250,
     ).split_documents(docs)
 
     return Chroma.from_documents(chunks, embeddings, persist_directory=DB_DIR)
+
 
 
 def build_retriever(use_reranker: bool = False, fetch_k: int = 15, top_k: int = 5):
