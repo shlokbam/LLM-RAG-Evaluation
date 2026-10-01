@@ -27,7 +27,7 @@ import json
 
 
 def clean_json_output(res: str) -> str:
-    """Strips preambles, markdown codeblocks, and sanitizes unescaped control characters/newlines."""
+    """Strips preambles, markdown codeblocks, and sanitizes unescaped control characters/newlines/tabs."""
     if not isinstance(res, str):
         return res
     res = res.strip()
@@ -49,14 +49,27 @@ def clean_json_output(res: str) -> str:
         parsed = json.loads(res, strict=False)
         return json.dumps(parsed)
     except Exception:
-        res_clean = re.sub(r"[\x00-\x1f]+", " ", res)
-        try:
-            parsed = json.loads(res_clean, strict=False)
-            return json.dumps(parsed)
-        except Exception:
-            pass
+        pass
+
+    def replace_ctrl(m):
+        c = m.group(0)
+        if c == "\n":
+            return "\\n"
+        elif c == "\r":
+            return "\\r"
+        elif c == "\t":
+            return "\\t"
+        return " "
+
+    res_clean = re.sub(r"[\x00-\x1f]", replace_ctrl, res)
+    try:
+        parsed = json.loads(res_clean, strict=False)
+        return json.dumps(parsed)
+    except Exception:
+        pass
 
     return res
+
 
 
 
