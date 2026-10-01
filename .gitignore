@@ -5,6 +5,16 @@ build/
 dist/
 wheels/
 *.egg-info
+.DS_Store
 
 # Virtual environments
 .venv
+
+# Environment files
+.env
+.env.*
+
+# Chroma store database
+chroma_store/
+
+
