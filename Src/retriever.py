@@ -38,12 +38,15 @@ import torch
 
 # 2. BUILD ---- chunk, embed once, and keep it on disk so we don't re-embed
 def load_store(rebuild: bool = False):
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    if hasattr(torch, "set_num_threads"):
+        torch.set_num_threads(4)
+    device = "cpu"
     embeddings = HuggingFaceEmbeddings(
         model_name="BAAI/bge-m3",
         model_kwargs={"device": device},
         encode_kwargs={"batch_size": 32, "normalize_embeddings": True},
     )
+
 
     if rebuild and os.path.exists(DB_DIR):
         import shutil
