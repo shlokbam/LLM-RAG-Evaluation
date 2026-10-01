@@ -68,7 +68,7 @@ Evaluated across **15 human-curated reference golden test cases** covering lectu
 ## ⭐ Key Technical Features & Optimizations
 
 1. **Two-Stage Reranking Pipeline**:
-   - **Stage 1 (Bi-Encoder Over-Retrieval)**: Uses `BAAI/bge-m3` to fast-retrieve `fetch_k = 25` candidate chunks from Chroma vector store.
+   - **Stage 1 (Bi-Encoder Over-Retrieval)**: Uses `BAAI/bge-m3` to fast-retrieve `fetch_k = 23` candidate chunks from Chroma vector store.
    - **Stage 2 (Cross-Encoder Re-Scoring)**: Uses `cross-encoder/ms-marco-MiniLM-L-6-v2` to perform pairwise query-document re-scoring, filtering down to the top `top_k = 6` chunks.
 
 2. **Apple Silicon (Mac M2) Hardware Safety**:
