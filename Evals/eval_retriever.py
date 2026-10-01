@@ -23,8 +23,11 @@ JUDGE_MODEL_NAME = "open-mistral-7b"
 THRESHOLD = 0.7
 
 
+import json
+
+
 def clean_json_output(res: str) -> str:
-    """Strips conversational preambles and markdown codeblock wrappers from LLM outputs."""
+    """Strips preambles, markdown codeblocks, and sanitizes unescaped control characters/newlines."""
     if not isinstance(res, str):
         return res
     res = res.strip()
@@ -42,7 +45,19 @@ def clean_json_output(res: str) -> str:
     elif first_bracket != -1 and last_bracket != -1:
         res = res[first_bracket:last_bracket + 1]
 
+    try:
+        parsed = json.loads(res, strict=False)
+        return json.dumps(parsed)
+    except Exception:
+        res_clean = re.sub(r"[\x00-\x1f]+", " ", res)
+        try:
+            parsed = json.loads(res_clean, strict=False)
+            return json.dumps(parsed)
+        except Exception:
+            pass
+
     return res
+
 
 
 # --- Custom Mistral Model Wrapper for DeepEval ---
