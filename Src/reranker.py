@@ -34,6 +34,7 @@ def build_reranking_retriever(fetch_k: int = 15, top_k: int = 5):
     return RerankingRetriever(fetch_k=fetch_k, top_k=top_k)
 
 
+
 if __name__ == "__main__":
     retriever = build_reranking_retriever()
     results = retriever.invoke("what is regression testing?")

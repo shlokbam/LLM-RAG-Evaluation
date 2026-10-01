@@ -24,51 +24,44 @@ THRESHOLD = 0.7
 
 
 import json
+from json_repair import repair_json
 
 
 def clean_json_output(res: str) -> str:
-    """Strips preambles, markdown codeblocks, and sanitizes unescaped control characters/newlines/tabs."""
+    """Strips preambles, markdown codeblocks, extra trailing blocks, and returns a single valid JSON string."""
     if not isinstance(res, str):
         return res
     res = res.strip()
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", res)
-    if match:
-        res = match.group(1).strip()
 
-    first_brace = res.find("{")
-    last_brace = res.rfind("}")
-    first_bracket = res.find("[")
-    last_bracket = res.rfind("]")
-
-    if first_brace != -1 and last_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
-        res = res[first_brace:last_brace + 1]
-    elif first_bracket != -1 and last_bracket != -1:
-        res = res[first_bracket:last_bracket + 1]
+    # Extract first complete `{ ... }` JSON object using brace stack tracking
+    first_b = res.find("{")
+    if first_b != -1:
+        stack = 0
+        end_b = -1
+        for i in range(first_b, len(res)):
+            if res[i] == "{":
+                stack += 1
+            elif res[i] == "}":
+                stack -= 1
+                if stack == 0:
+                    end_b = i
+                    break
+        if end_b != -1:
+            res = res[first_b:end_b + 1]
 
     try:
-        parsed = json.loads(res, strict=False)
-        return json.dumps(parsed)
-    except Exception:
-        pass
-
-    def replace_ctrl(m):
-        c = m.group(0)
-        if c == "\n":
-            return "\\n"
-        elif c == "\r":
-            return "\\r"
-        elif c == "\t":
-            return "\\t"
-        return " "
-
-    res_clean = re.sub(r"[\x00-\x1f]", replace_ctrl, res)
-    try:
-        parsed = json.loads(res_clean, strict=False)
-        return json.dumps(parsed)
+        parsed = repair_json(res, return_objects=True)
+        if isinstance(parsed, dict):
+            return json.dumps(parsed)
+        elif isinstance(parsed, list) and len(parsed) > 0 and isinstance(parsed[0], dict):
+            return json.dumps(parsed[0])
     except Exception:
         pass
 
     return res
+
+
+
 
 
 
