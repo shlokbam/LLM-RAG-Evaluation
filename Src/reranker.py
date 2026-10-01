@@ -7,7 +7,7 @@ CROSS_ENCODER = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
 class RerankingRetriever:
-    def __init__(self, fetch_k: int = 25, top_k: int = 6, model_name: str = CROSS_ENCODER):
+    def __init__(self, fetch_k: int = 25, top_k: int = 7, model_name: str = CROSS_ENCODER):
         self.store = load_store()
         self.reranker = CrossEncoder(model_name)
         self.fetch_k = fetch_k   # how many the bi-encoder brings back (over-retrieve)
@@ -29,7 +29,7 @@ class RerankingRetriever:
         return [doc for doc, _ in ranked[: self.top_k]]
 
 
-def build_reranking_retriever(fetch_k: int = 25, top_k: int = 6):
+def build_reranking_retriever(fetch_k: int = 25, top_k: int = 7):
     """Factory function to build a RerankingRetriever."""
     return RerankingRetriever(fetch_k=fetch_k, top_k=top_k)
 
