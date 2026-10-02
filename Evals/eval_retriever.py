@@ -42,6 +42,20 @@ def clean_json_output(res: str) -> str:
     # 2. Try direct json_repair parse
     try:
         parsed = repair_json(res, return_objects=True)
+        if isinstance(parsed, list) and len(parsed) > 0 and all(isinstance(x, dict) for x in parsed):
+            merged = {}
+            for item in parsed:
+                for k, v in item.items():
+                    if k not in merged:
+                        merged[k] = v
+                    elif isinstance(merged[k], list) and isinstance(v, list):
+                        merged[k] = merged[k] + v
+            if "verdicts" in merged and isinstance(merged["verdicts"], list):
+                for v in merged["verdicts"]:
+                    if isinstance(v, dict) and "reason" not in v:
+                        v["reason"] = "N/A"
+            return json.dumps(merged)
+
         if isinstance(parsed, dict):
             if "verdicts" in parsed and isinstance(parsed["verdicts"], list):
                 for item in parsed["verdicts"]:
