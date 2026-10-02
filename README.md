@@ -1,15 +1,15 @@
 # LLM RAG Evaluation Engine 🚀
 
-> **Comprehensive Two-Stage Retrieval Evaluation & Synthetic Dataset Generation Suite**
+> **Comprehensive Two-Stage Retrieval Evaluation, Grounded Generation & Synthetic Dataset Suite**
 > Powered by **DeepEval**, **LangChain**, **ChromaDB**, **BAAI/bge-m3**, **Cross-Encoder Reranking**, and **Mistral AI**.
 
 ---
 
 ## 📋 Overview
 
-This repository implements a production-grade **Retrieval-Augmented Generation (RAG) Evaluation Framework**. It is designed to evaluate, benchmark, and optimize document retrieval performance across video transcripts (VTT format) from multi-session AI/LLM courses.
+This repository implements a production-grade **Retrieval-Augmented Generation (RAG) Evaluation Framework**. It is designed to evaluate, benchmark, and optimize both document retrieval performance and LLM generation quality across video transcripts (VTT format) from multi-session AI/LLM courses.
 
-The framework combines a **two-stage retrieval pipeline** (Dense Bi-Encoder over-retrieval + Cross-Encoder re-scoring) with automated **DeepEval Contextual Metrics** (Contextual Recall & Contextual Precision) judged by `open-mistral-7b`.
+The framework combines a **two-stage retrieval pipeline** (Dense Bi-Encoder over-retrieval + Cross-Encoder re-scoring), a **faithfulness-first generator** powered by Mistral AI, and automated **DeepEval Contextual & Generation Metrics** (Contextual Recall, Contextual Precision, Faithfulness, and Answer Relevancy) judged by `open-mistral-7b`.
 
 ---
 
@@ -31,21 +31,32 @@ flowchart TD
         CrossEncoder --> TopK["Top-6 Reranked Chunks"]
     end
 
-    subgraph DeepEvalHarness ["3. DeepEval Evaluation Suite"]
-        TopK --> TestCases["LLMTestCase (Input, Context, Ideal Answer)"]
-        Goldens["🎯 Golden Dataset (Goldens/retriever_goldens.json)"] --> TestCases
-        TestCases --> Recall["Contextual Recall Metric (threshold=0.70)"]
-        TestCases --> Precision["Contextual Precision Metric (threshold=0.70)"]
-        Recall --> MistralJudge["Judge Model: MistralLLM (open-mistral-7b)"]
-        Precision --> MistralJudge
-        MistralJudge --> JSONRepair["clean_json_output (json_repair)"]
-        JSONRepair --> Report["📊 Evaluation Report & Summary"]
+    subgraph GeneratorComponent ["3. Grounded Generator Pipeline"]
+        TopK --> GenPrompt["Faithfulness-First Prompt Template"]
+        GenPrompt --> MistralGen["LLM: ChatMistralAI (open-mistral-7b)"]
+        MistralGen --> Answer["Grounded Answer (Stream / Full)"]
+    end
+
+    subgraph DeepEvalHarness ["4. DeepEval Evaluation Suite"]
+        TopK --> RetCases["Retriever Test Cases"]
+        RetCases --> Recall["Contextual Recall Metric (0.70)"]
+        RetCases --> Precision["Contextual Precision Metric (0.70)"]
+
+        Answer --> GenCases["Generator Test Cases (Isolation)"]
+        GenCases --> Faithfulness["Faithfulness Metric (0.70)"]
+        GenCases --> Relevancy["Answer Relevancy Metric (0.70)"]
+
+        Recall & Precision & Faithfulness & Relevancy --> MistralJudge["Judge Model: MistralLLM (open-mistral-7b)"]
+        MistralJudge --> JSONRepair["clean_json_output (Bracket Stack + json_repair)"]
+        JSONRepair --> Report["📊 Evaluation Summary Reports"]
     end
 ```
 
 ---
 
 ## 📊 Evaluation Performance Benchmarks
+
+### 1. Retriever Benchmarks (15 Reference Goldens)
 
 Evaluated across **15 human-curated reference golden test cases** covering lecture sessions 1 to 9:
 
@@ -57,11 +68,14 @@ Evaluated across **15 human-curated reference golden test cases** covering lectu
 | **Reranked (`fetch_k=25, top_k=6`, overlap=250)** | 0.8955 | 0.7577 | 73.3% (11/15) | 93.3% (14/15) |
 | **Reranked Active Default (`fetch_k=23, top_k=6`, overlap=150)** 🏆 | **0.9047** | **0.7493** | **60.0% (9/15)** | **93.3% (14/15)** |
 
-### Key Hyperparameter Sweep Insights:
-- **Optimal Candidate Pool (`fetch_k=23`)**: Over-retrieving 23 candidates gives the Cross-Encoder the necessary depth to capture multi-sentence lecture concepts.
-- **Chunking Strategy (`size=1000, overlap=150`)**: Fine-tuned chunking prevents text redundancy across context windows, yielding high contextual precision (**0.9047**, **93.33% pass rate**).
-- **Top-K Cutoff Tuning (`top_k=6`)**: Keeping top 6 reranked chunks balances precision while filtering out noisy background chunks.
-- **Benchmark Stability**: Maintains **93.33% Contextual Precision Pass Rate** (14/15 passed) and **60.0% Contextual Recall Pass Rate** (9/15 passed) with an average recall score of **0.7493**.
+### 2. Generator Benchmarks (15 Isolated Faithfulness Test Cases)
+
+Evaluated in component isolation on known-good golden contexts using `ChatMistralAI(model="open-mistral-7b")`:
+
+| Metric | Average Score | Pass Rate | Status |
+| :--- | :--- | :--- | :--- |
+| **Faithfulness Metric** | **0.9513** | **100.0% (15/15 passed)** | 🎉 100% PASS |
+| **Answer Relevancy Metric** | **1.0000** | **100.0% (15/15 passed)** | 🎉 100% PASS |
 
 ---
 
@@ -71,15 +85,19 @@ Evaluated across **15 human-curated reference golden test cases** covering lectu
    - **Stage 1 (Bi-Encoder Over-Retrieval)**: Uses `BAAI/bge-m3` to fast-retrieve `fetch_k = 23` candidate chunks from Chroma vector store.
    - **Stage 2 (Cross-Encoder Re-Scoring)**: Uses `cross-encoder/ms-marco-MiniLM-L-6-v2` to perform pairwise query-document re-scoring, filtering down to the top `top_k = 6` chunks.
 
-2. **Apple Silicon (Mac M2) Hardware Safety**:
+2. **Faithfulness-First Grounded Generator**:
+   - Powered by `ChatMistralAI(model="open-mistral-7b", temperature=0)`.
+   - Employs strict system prompts instructing the model to answer *only* from context and abstain when context is insufficient.
+   - Supports both non-streaming (`generate()`) and token-by-token streaming (`generate_stream()`) outputs.
+
+3. **Apple Silicon (Mac M2) Hardware Safety**:
    - Caps PyTorch CPU thread usage (`torch.set_num_threads(4)`) and sets batch encoding size (`batch_size = 32`) to prevent CPU thread starvation and system freezing during heavy embedding tasks.
 
-3. **Robust LLM Judge & JSON Repair System**:
+4. **Robust LLM Judge & Multi-Block JSON Repair System**:
    - Custom `MistralLLM` class extending DeepEval's `DeepEvalBaseLLM`.
-   - Built-in `clean_json_output()` pipeline using `json_repair` and brace-stack tracking (`{ ... }`) to sanitize LLM responses containing unescaped newlines, control characters, or markdown codeblocks.
-   - Graceful schema fallback: Raises `TypeError` on native schema calls to trigger DeepEval's automatic fallback Pydantic deserialization.
+   - Advanced `clean_json_output()` sanitizer featuring markdown fence stripping, bracket/brace stack extraction (`{...}` and `[...]`), and multi-block JSON array merging to handle open-source LLM formatting quirks.
 
-4. **Synthetic Golden Generation**:
+5. **Synthetic Golden Generation**:
    - Automated creation of synthetic test cases using DeepEval's `Synthesizer` with evolution strategies (`Goldens/generate_goldens.py`).
 
 ---
@@ -93,15 +111,18 @@ Evaluated across **15 human-curated reference golden test cases** covering lectu
 │   ├── ...
 │   └── YT Sandbox LLM Evals Session 9.vtt
 ├── Evals/                            # Evaluation harness & execution
-│   ├── eval_retriever.py            # Primary evaluation script (DeepEval metrics)
+│   ├── eval_retriever.py            # Retriever evaluation suite (Precision & Recall)
+│   ├── eval_generator.py            # Generator evaluation suite (Faithfulness & Relevancy)
 │   └── harness.py                   # Metric summarization & reporting utilities
 ├── Goldens/                          # Reference and synthetic golden datasets
-│   ├── retriever_goldens.json       # 15 human-authored reference goldens
+│   ├── retriever_goldens.json       # 15 human-authored retriever goldens
+│   ├── faithfulness_dataset.json    # 15 human-authored generator goldens
 │   ├── retriever_deepeval_goldens.json # Generated synthetic golden draft dataset
 │   └── generate_goldens.py          # DeepEval Synthesizer script
 ├── src/                              # Core RAG implementation
 │   ├── retriever.py                 # Ingestion, VTT parser, Chroma vector store
-│   └── reranker.py                  # Two-stage Cross-Encoder reranker
+│   ├── reranker.py                  # Two-stage Cross-Encoder reranker
+│   └── generator.py                 # Grounded Mistral LLM generator & streaming
 ├── chroma_store/                     # Local persisted ChromaDB store
 ├── pyproject.toml                    # Dependencies (uv / pyproject configuration)
 └── README.md                         # Project documentation
@@ -128,25 +149,33 @@ Create a `.env` file in the project root:
 MISTRAL_API_KEY=your_mistral_api_key_here
 ```
 
-### 3. Build Vector Store & Run Basic Retrieval
+### 3. Build Vector Store & Test RAG Components
 
-To ingest transcripts from `Data/*.vtt` and build/test the Chroma vector store:
+Ingest transcripts and build Chroma vector store:
 ```bash
 uv run python src/retriever.py
 ```
 
-To test the standalone Cross-Encoder reranker:
+Test the standalone Cross-Encoder reranker:
 ```bash
 uv run python src/reranker.py
+```
+
+Test the Mistral generator (streaming & non-streaming):
+```bash
+PYTHONPATH=. uv run python src/generator.py
 ```
 
 ---
 
 ## 🧪 Running Evaluations
 
-### Run Two-Stage Reranked Retriever Evaluation
+### Run Generator Evaluation Suite (Faithfulness & Relevancy)
+```bash
+PYTHONPATH=. uv run python Evals/eval_generator.py
+```
 
-Execute the full evaluation suite with `ContextualRecallMetric` and `ContextualPrecisionMetric`:
+### Run Two-Stage Reranked Retriever Evaluation (Recall & Precision)
 ```bash
 PYTHONPATH=. uv run python Evals/eval_retriever.py --rerank
 ```
@@ -162,7 +191,7 @@ PYTHONPATH=. uv run python Evals/eval_retriever.py
 
 To synthesize new test cases from transcript context using DeepEval's `Synthesizer` and Mistral 7B:
 ```bash
-"/Users/shlokbam/Documents/Code/LLM RAG Evaluation/.venv/bin/python" "Goldens/generate_goldens.py"
+uv run python Goldens/generate_goldens.py
 ```
 The resulting synthetic goldens are saved to `Goldens/retriever_deepeval_goldens.json`.
 
@@ -174,5 +203,5 @@ The resulting synthetic goldens are saved to `Goldens/retriever_deepeval_goldens
 - **Vector DB**: [ChromaDB](https://www.trychroma.com/)
 - **Embeddings**: [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3)
 - **Reranker**: [`cross-encoder/ms-marco-MiniLM-L-6-v2`](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2)
-- **LLM Judge**: `open-mistral-7b` via [`langchain_mistralai`](https://github.com/langchain-ai/langchain-mistralai)
+- **LLM Generator & Judge**: `open-mistral-7b` via [`langchain_mistralai`](https://github.com/langchain-ai/langchain-mistralai)
 - **JSON Sanitization**: [`json-repair`](https://github.com/maitool/json-repair)
