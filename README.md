@@ -9,7 +9,7 @@
 
 This repository implements a production-grade **Retrieval-Augmented Generation (RAG) Evaluation Framework**. It is designed to evaluate, benchmark, and optimize document retrieval performance, LLM generation quality, and end-to-end RAG pipeline behavior across video transcripts (VTT format) from multi-session AI/LLM courses.
 
-The framework combines a **two-stage retrieval pipeline** (Dense Bi-Encoder over-retrieval + Cross-Encoder re-scoring), a **faithfulness-first generator** powered by Mistral AI, an **end-to-end RAG pipeline orchestrator**, and automated **DeepEval Metrics** (Contextual Recall, Contextual Precision, Faithfulness, Answer Relevancy, and Contextual Relevancy) judged by `open-mistral-7b`.
+The framework combines a **two-stage retrieval pipeline** (Dense Bi-Encoder over-retrieval + Cross-Encoder re-scoring), a **faithfulness-first generator** powered by Mistral AI, an **end-to-end RAG pipeline orchestrator**, and automated **DeepEval Metrics** (Contextual Recall, Contextual Precision, Faithfulness, Answer Relevancy, Contextual Relevancy, and Custom G-Eval Rubrics) judged by `open-mistral-7b`.
 
 ---
 
@@ -69,7 +69,7 @@ flowchart TD
 
 ### 1. Retriever Component Benchmarks (15 Reference Goldens)
 
-Evaluated across **15 human-curated reference golden test cases** covering lecture sessions 1 to 9:
+Evaluated across **15 human-curated reference golden test cases** (`Goldens/retriever_goldens.json`) covering lecture sessions 1 to 9:
 
 | Retrieval Configuration | Contextual Precision | Contextual Recall | Pass Rate (Recall) | Pass Rate (Precision) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -102,11 +102,120 @@ Evaluated end-to-end on live retriever + generator output using `RagPipeline()`:
 
 Evaluated end-to-end using custom G-Eval rubrics and criteria (`Evals/eval_application.py`):
 
-| Application Metric | Average Score | Pass Rate | Evaluation Focus |
-| :--- | :--- | :--- | :--- |
-| **Correctness [GEval]** | **0.9133** | **100.0% (15/15 passed)** | 🎉 Factually accurate claims vs ideal truth |
-| **Completeness [GEval]** | **0.8400** | **93.3% (14/15 passed)** | 🎉 Coverage of key points in ideal answer |
-| **Style [GEval]** | **0.9867** | **100.0% (15/15 passed)** | 🎉 Intuitive CampusX teaching voice & tone |
+| Application Metric | Run 1 Avg Score | Run 1 Pass Rate | Run 2 Avg Score | Run 2 Pass Rate | Evaluation Focus |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Correctness [GEval]** | 0.9133 | 100.0% (15/15) | **0.9333** | **100.0% (15/15 passed)** | 🎉 Factually accurate claims vs ideal truth |
+| **Completeness [GEval]** | 0.8400 | 93.3% (14/15) | **0.8800** | **100.0% (15/15 passed)** | 🎉 Coverage of key points in ideal answer |
+| **Style [GEval]** | 0.9867 | 100.0% (15/15) | **0.9733** | **100.0% (15/15 passed)** | 🎉 Intuitive CampusX teaching voice & tone |
+
+---
+
+## 🗂 Golden Datasets & Schema Specification
+
+The evaluation framework relies on curated reference golden datasets stored in JSON format under `Goldens/`:
+
+1. **`Goldens/retriever_goldens.json`** (15 Reference Cases):
+   - Used by `Evals/eval_retriever.py` to judge document retrieval quality.
+   - **Schema**:
+     ```json
+     {
+       "id": "ret_001",
+       "query": "What is the difference between online and offline evaluation?",
+       "ideal_answer": "Offline evaluation uses static datasets and benchmark metrics...",
+       "source": "Session 1 Transcript"
+     }
+     ```
+
+2. **`Goldens/faithfulness_dataset.json`** (15 Grounded Cases):
+   - Used by `Evals/eval_generator.py` and `Evals/eval_rag_pipeline.py`.
+   - **Schema**:
+     ```json
+     {
+       "id": "gen_001",
+       "query": "What is drift in LLM monitoring?",
+       "ideal_context": [
+         "Data drift occurs when input data distribution changes over time..."
+       ],
+       "source": "Session 4 Transcript"
+     }
+     ```
+
+3. **`Goldens/correctness_goldens.json`** (15 GEval Application Cases):
+   - Used by `Evals/eval_application.py` to evaluate overall application response quality against human standards.
+   - **Schema**:
+     ```json
+     {
+       "id": "app_001",
+       "question": "How do we evaluate generator faithfulness?",
+       "ideal_answer": "Faithfulness measures the proportion of claims made in the answer...",
+       "source": "Session 5 Transcript"
+     }
+     ```
+
+4. **`Goldens/retriever_deepeval_goldens.json`** (Synthetic Draft Dataset):
+   - Generated via DeepEval's `Synthesizer` script (`Goldens/generate_goldens.py`) to produce synthetic ground truth questions and expected answers directly from chunked course transcripts.
+
+---
+
+## 📐 DeepEval Metric Definitions & Evaluation Criteria
+
+All metrics enforce a passing threshold of `THRESHOLD = 0.70`:
+
+| Metric Name | Type | Key Evaluation Focus |
+| :--- | :--- | :--- |
+| **Contextual Precision** | Reference-Based | Evaluates whether relevant retrieved chunks appear higher in the ranked context list than irrelevant ones. |
+| **Contextual Recall** | Reference-Based | Evaluates whether the retrieved context chunks contain all necessary information present in the `ideal_answer`. |
+| **Faithfulness** | Reference-Free | Decomposes `actual_output` into atomic claims and verifies whether each claim is strictly supported by `retrieval_context`. |
+| **Answer Relevancy** | Reference-Free | Measures how directly and completely `actual_output` addresses `input`, penalizing off-topic statements. |
+| **Contextual Relevancy** | Reference-Free | Evaluates the signal-to-noise ratio in `retrieval_context` by measuring what fraction of chunks are relevant to `input`. |
+| **GEval: Correctness** | Reference-Based | Compares factual claims in `actual_output` against `expected_output`. Scores $\ge 0.9$ if facts are true; does not penalize for brevity or missing points. |
+| **GEval: Completeness** | Reference-Based | Checks coverage of key points from `expected_output` in `actual_output`. Penalizes omitted key points regardless of factual accuracy. |
+| **GEval: Style** | Reference-Free | Evaluates teaching register and tone. Rewards intuitive, conversational prose in the CampusX teaching style; penalizes dry, bullet-list, or stiff responses. |
+
+### GEval Rubric Highlights (`Evals/eval_application.py`)
+
+- **Correctness Rubric**:
+  - `9-10`: All stated claims are factually correct and consistent. No contradictions. Brevity is fine.
+  - `5-8`: Mostly correct but one minor inaccuracy.
+  - `0-4`: Contains a clear factual error or a claim that contradicts the expected output.
+- **Completeness Rubric**:
+  - `9-10`: Addresses essentially all key points in the expected output.
+  - `5-8`: Covers main key points but misses one or more.
+  - `0-4`: Misses several key points; only partially covers expected output.
+- **Style Rubric**:
+  - `9-10`: Clearly in a CampusX teaching voice: intuitive, conversational prose that explains before it formalizes.
+  - `7-8`: Clear, conversational, and well-explained in prose. Fully acceptable even without an analogy or example.
+  - `4-6`: Understandable but somewhat flat, formal, or list-heavy in places.
+  - `0-3`: Dry, stiff, bare-list, jargon-heavy, or robotic; does not read like a teaching explanation.
+
+---
+
+## 🛠 Multi-Block JSON Repair & LLM Judge Engine
+
+Open-source models like `open-mistral-7b` often append conversational text or emit fragmented multi-block JSON arrays when asked for structured metric evaluation verdicts. To eliminate runtime exceptions during bulk evaluations, a custom judge wrapper and JSON sanitizer was engineered in `Evals/eval_retriever.py`:
+
+```python
+# Custom Mistral Base Model with Exponential Backoff
+class MistralLLM(DeepEvalBaseLLM):
+    def __init__(self, model_name="open-mistral-7b"):
+        self.model = ChatMistralAI(model=model_name, max_retries=5)
+
+    def generate(self, prompt: str, schema=None, *args, **kwargs) -> str:
+        for attempt in range(5):
+            try:
+                res = self.model.invoke(prompt).content
+                return clean_json_output(res)
+            except Exception as e:
+                if ("429" in str(e) or "rate" in str(e).lower()) and attempt < 4:
+                    time.sleep(3 * (attempt + 1))
+                else:
+                    raise e
+```
+
+### `clean_json_output()` Pipeline:
+1. **Code Fence Strip**: Strips markdown backticks (`` ```json ... ``` ``).
+2. **Direct JSON Repair & Verdict Normalization**: Uses `json-repair` to convert loose LLM strings into valid JSON objects, merging fragmented arrays and injecting default `"reason": "N/A"` for missing metric fields.
+3. **Bracket/Brace Stack Tracking**: Dynamically tracks character stacks for `{...}` and `[...]` to extract structural JSON blocks while ignoring extraneous leading or trailing LLM preamble text.
 
 ---
 
@@ -127,9 +236,8 @@ Evaluated end-to-end using custom G-Eval rubrics and criteria (`Evals/eval_appli
 4. **Apple Silicon (Mac M2) Hardware Safety**:
    - Caps PyTorch CPU thread usage (`torch.set_num_threads(4)`) and sets batch encoding size (`batch_size = 32`) to prevent CPU thread starvation and system freezing during heavy embedding tasks.
 
-5. **Robust LLM Judge & Multi-Block JSON Repair System**:
-   - Custom `MistralLLM` class extending DeepEval's `DeepEvalBaseLLM`.
-   - Advanced `clean_json_output()` sanitizer featuring markdown fence stripping, bracket/brace stack extraction (`{...}` and `[...]`), and multi-block JSON array merging to handle open-source LLM formatting quirks.
+5. **LangSmith Traceability**:
+   - Includes `@traceable` decorators across `RerankingRetriever` and `RagPipeline` for seamless latency and execution tracing.
 
 6. **Synthetic Golden Generation**:
    - Automated creation of synthetic test cases using DeepEval's `Synthesizer` with evolution strategies (`Goldens/generate_goldens.py`).
@@ -140,14 +248,14 @@ Evaluated end-to-end using custom G-Eval rubrics and criteria (`Evals/eval_appli
 
 ```
 .
-├── Data/                             # VTT lecture transcripts
+├── Data/                             # VTT lecture transcripts (Sessions 1 - 8/9)
 │   ├── YT Sandbox LLM Evals Session 1.vtt
 │   ├── ...
-│   └── YT Sandbox LLM Evals Session 9.vtt
-├── Evals/                            # Evaluation harness & execution
+│   └── YT Sandbox LLM Evals Session 8.vtt
+├── Evals/                            # Evaluation harness & execution suites
 │   ├── eval_retriever.py            # Retriever evaluation suite (Precision & Recall)
 │   ├── eval_generator.py            # Generator evaluation suite (Faithfulness & Relevancy)
-│   ├── eval_rag_pipeline.py         # End-to-End RAG Triad suite (Faithfulness, Relevancy, Contextual Relevancy)
+│   ├── eval_rag_pipeline.py         # End-to-End RAG Triad suite (Faithfulness, Relevancy, Ctx Relevancy)
 │   ├── eval_application.py          # Application quality suite (Correctness, Completeness, Style)
 │   └── harness.py                   # Metric summarization & reporting utilities
 ├── Goldens/                          # Reference and synthetic golden datasets
@@ -252,11 +360,27 @@ The resulting synthetic goldens are saved to `Goldens/retriever_deepeval_goldens
 
 ---
 
-## 🛠 Tech Stack
+## 📦 Dependencies & Tech Stack
 
-- **Frameworks**: [DeepEval](https://github.com/confident-ai/deepeval), [LangChain](https://github.com/langchain-ai/langchain)
-- **Vector DB**: [ChromaDB](https://www.trychroma.com/)
-- **Embeddings**: [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3)
-- **Reranker**: [`cross-encoder/ms-marco-MiniLM-L-6-v2`](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2)
-- **LLM Generator & Judge**: `open-mistral-7b` via [`langchain_mistralai`](https://github.com/langchain-ai/langchain-mistralai)
-- **JSON Sanitization**: [`json-repair`](https://github.com/maitool/json-repair)
+Declared in `pyproject.toml`:
+
+```toml
+[project]
+name = "llm-rag-evaluation"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "chromadb>=1.5.9",
+    "deepeval>=4.2.7",
+    "json-repair>=0.63.5",
+    "langchain-chroma>=1.1.0",
+    "langchain-core>=1.6.6",
+    "langchain-groq>=1.1.3",
+    "langchain-huggingface>=1.2.2",
+    "langchain-mistralai>=1.1.6",
+    "langchain-text-splitters>=1.1.2",
+    "pytest>=9.1.1",
+    "python-dotenv>=1.2.4",
+    "sentence-transformers>=6.1.0",
+]
+```
