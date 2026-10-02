@@ -55,8 +55,9 @@ flowchart TD
 
         FinalOutput --> PipelineCases["Live RAG Pipeline Test Cases"]
         PipelineCases --> CtxRelevancy["Contextual Relevancy Metric (0.70)"]
+        PipelineCases --> GEvalApp["GEval Metrics: Correctness, Completeness, Style"]
 
-        Recall & Precision & Faithfulness & Relevancy & CtxRelevancy --> MistralJudge["Judge Model: MistralLLM (open-mistral-7b)"]
+        Recall & Precision & Faithfulness & Relevancy & CtxRelevancy & GEvalApp --> MistralJudge["Judge Model: MistralLLM (open-mistral-7b)"]
         MistralJudge --> JSONRepair["clean_json_output (Bracket Stack + json_repair)"]
         JSONRepair --> Report["📊 Evaluation Summary Reports"]
     end
@@ -66,7 +67,7 @@ flowchart TD
 
 ## 📊 Evaluation Performance Benchmarks
 
-### 1. Retriever Benchmarks (15 Reference Goldens)
+### 1. Retriever Component Benchmarks (15 Reference Goldens)
 
 Evaluated across **15 human-curated reference golden test cases** covering lecture sessions 1 to 9:
 
@@ -78,7 +79,7 @@ Evaluated across **15 human-curated reference golden test cases** covering lectu
 | **Reranked (`fetch_k=25, top_k=6`, overlap=250)** | 0.8955 | 0.7577 | 73.3% (11/15) | 93.3% (14/15) |
 | **Reranked Active Default (`fetch_k=23, top_k=6`, overlap=150)** 🏆 | **0.9047** | **0.7493** | **60.0% (9/15)** | **93.3% (14/15)** |
 
-### 2. Generator Benchmarks (15 Isolated Faithfulness Test Cases)
+### 2. Generator Component Benchmarks (Isolated Context)
 
 Evaluated in component isolation on known-good golden contexts using `ChatMistralAI(model="open-mistral-7b")`:
 
@@ -96,6 +97,16 @@ Evaluated end-to-end on live retriever + generator output using `RagPipeline()`:
 | **Faithfulness** | **0.9914** | **100.0% (15/15 passed)** | 🎉 Zero Hallucination |
 | **Answer Relevancy** | **0.9749** | **100.0% (15/15 passed)** | 🎉 High User Query Alignment |
 | **Contextual Relevancy** | **0.5508** | **13.3% (2/15 passed)** | ⚠️ Penalizes conversational lecture noise |
+
+### 4. Application Quality Benchmarks (15 GEval Test Cases)
+
+Evaluated end-to-end using custom G-Eval rubrics and criteria (`Evals/eval_application.py`):
+
+| Application Metric | Average Score | Pass Rate | Evaluation Focus |
+| :--- | :--- | :--- | :--- |
+| **Correctness [GEval]** | **0.9133** | **100.0% (15/15 passed)** | 🎉 Factually accurate claims vs ideal truth |
+| **Completeness [GEval]** | **0.8400** | **93.3% (14/15 passed)** | 🎉 Coverage of key points in ideal answer |
+| **Style [GEval]** | **0.9867** | **100.0% (15/15 passed)** | 🎉 Intuitive CampusX teaching voice & tone |
 
 ---
 
@@ -137,10 +148,12 @@ Evaluated end-to-end on live retriever + generator output using `RagPipeline()`:
 │   ├── eval_retriever.py            # Retriever evaluation suite (Precision & Recall)
 │   ├── eval_generator.py            # Generator evaluation suite (Faithfulness & Relevancy)
 │   ├── eval_rag_pipeline.py         # End-to-End RAG Triad suite (Faithfulness, Relevancy, Contextual Relevancy)
+│   ├── eval_application.py          # Application quality suite (Correctness, Completeness, Style)
 │   └── harness.py                   # Metric summarization & reporting utilities
 ├── Goldens/                          # Reference and synthetic golden datasets
 │   ├── retriever_goldens.json       # 15 human-authored retriever goldens
 │   ├── faithfulness_dataset.json    # 15 human-authored generator goldens
+│   ├── correctness_goldens.json     # 15 human-authored application goldens
 │   ├── retriever_deepeval_goldens.json # Generated synthetic golden draft dataset
 │   └── generate_goldens.py          # DeepEval Synthesizer script
 ├── src/                              # Core RAG implementation
@@ -200,23 +213,29 @@ PYTHONPATH=. uv run python src/rag_pipeline.py
 
 ## 🧪 Running Evaluations
 
-### 1. Run End-to-End RAG Pipeline Evaluation (RAG Triad)
+### 1. Run Application Quality Evaluation (GEval: Correctness, Completeness, Style)
+Execute custom G-Eval criteria evaluation on full pipeline output:
+```bash
+PYTHONPATH=. uv run python Evals/eval_application.py
+```
+
+### 2. Run End-to-End RAG Pipeline Evaluation (RAG Triad)
 Execute full pipeline evaluation for Faithfulness, Answer Relevancy, and Contextual Relevancy:
 ```bash
 PYTHONPATH=. uv run python Evals/eval_rag_pipeline.py
 ```
 
-### 2. Run Generator Evaluation Suite (Faithfulness & Relevancy)
+### 3. Run Generator Evaluation Suite (Faithfulness & Relevancy)
 ```bash
 PYTHONPATH=. uv run python Evals/eval_generator.py
 ```
 
-### 3. Run Two-Stage Reranked Retriever Evaluation (Recall & Precision)
+### 4. Run Two-Stage Reranked Retriever Evaluation (Recall & Precision)
 ```bash
 PYTHONPATH=. uv run python Evals/eval_retriever.py --rerank
 ```
 
-### 4. Run Baseline Retrieval (Single-Stage Vector Search)
+### 5. Run Baseline Retrieval (Single-Stage Vector Search)
 ```bash
 PYTHONPATH=. uv run python Evals/eval_retriever.py
 ```
