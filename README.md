@@ -1,15 +1,15 @@
 # LLM RAG Evaluation Engine 🚀
 
-> **Comprehensive Two-Stage Retrieval Evaluation, Grounded Generation & Synthetic Dataset Suite**
+> **Comprehensive Two-Stage Retrieval, Grounded Generation & End-to-End RAG Triad Suite**
 > Powered by **DeepEval**, **LangChain**, **ChromaDB**, **BAAI/bge-m3**, **Cross-Encoder Reranking**, and **Mistral AI**.
 
 ---
 
 ## 📋 Overview
 
-This repository implements a production-grade **Retrieval-Augmented Generation (RAG) Evaluation Framework**. It is designed to evaluate, benchmark, and optimize both document retrieval performance and LLM generation quality across video transcripts (VTT format) from multi-session AI/LLM courses.
+This repository implements a production-grade **Retrieval-Augmented Generation (RAG) Evaluation Framework**. It is designed to evaluate, benchmark, and optimize document retrieval performance, LLM generation quality, and end-to-end RAG pipeline behavior across video transcripts (VTT format) from multi-session AI/LLM courses.
 
-The framework combines a **two-stage retrieval pipeline** (Dense Bi-Encoder over-retrieval + Cross-Encoder re-scoring), a **faithfulness-first generator** powered by Mistral AI, and automated **DeepEval Contextual & Generation Metrics** (Contextual Recall, Contextual Precision, Faithfulness, and Answer Relevancy) judged by `open-mistral-7b`.
+The framework combines a **two-stage retrieval pipeline** (Dense Bi-Encoder over-retrieval + Cross-Encoder re-scoring), a **faithfulness-first generator** powered by Mistral AI, an **end-to-end RAG pipeline orchestrator**, and automated **DeepEval Metrics** (Contextual Recall, Contextual Precision, Faithfulness, Answer Relevancy, and Contextual Relevancy) judged by `open-mistral-7b`.
 
 ---
 
@@ -37,7 +37,14 @@ flowchart TD
         MistralGen --> Answer["Grounded Answer (Stream / Full)"]
     end
 
-    subgraph DeepEvalHarness ["4. DeepEval Evaluation Suite"]
+    subgraph RagOrchestrator ["4. End-to-End RAG Pipeline (RagPipeline)"]
+        Query --> TwoStageRetriever
+        TwoStageRetriever --> Context["Retrieved Context Chunks"]
+        Context & Query --> GeneratorComponent
+        GeneratorComponent --> FinalOutput["RagResult (Query, Answer, Context)"]
+    end
+
+    subgraph DeepEvalHarness ["5. DeepEval Evaluation Suite"]
         TopK --> RetCases["Retriever Test Cases"]
         RetCases --> Recall["Contextual Recall Metric (0.70)"]
         RetCases --> Precision["Contextual Precision Metric (0.70)"]
@@ -46,7 +53,10 @@ flowchart TD
         GenCases --> Faithfulness["Faithfulness Metric (0.70)"]
         GenCases --> Relevancy["Answer Relevancy Metric (0.70)"]
 
-        Recall & Precision & Faithfulness & Relevancy --> MistralJudge["Judge Model: MistralLLM (open-mistral-7b)"]
+        FinalOutput --> PipelineCases["Live RAG Pipeline Test Cases"]
+        PipelineCases --> CtxRelevancy["Contextual Relevancy Metric (0.70)"]
+
+        Recall & Precision & Faithfulness & Relevancy & CtxRelevancy --> MistralJudge["Judge Model: MistralLLM (open-mistral-7b)"]
         MistralJudge --> JSONRepair["clean_json_output (Bracket Stack + json_repair)"]
         JSONRepair --> Report["📊 Evaluation Summary Reports"]
     end
@@ -77,6 +87,16 @@ Evaluated in component isolation on known-good golden contexts using `ChatMistra
 | **Faithfulness Metric** | **0.9513** | **100.0% (15/15 passed)** | 🎉 100% PASS |
 | **Answer Relevancy Metric** | **1.0000** | **100.0% (15/15 passed)** | 🎉 100% PASS |
 
+### 3. End-to-End RAG Pipeline Benchmarks (RAG Triad)
+
+Evaluated end-to-end on live retriever + generator output using `RagPipeline()`:
+
+| RAG Triad Metric | Average Score | Pass Rate | Evaluation Focus |
+| :--- | :--- | :--- | :--- |
+| **Faithfulness** | **0.9914** | **100.0% (15/15 passed)** | 🎉 Zero Hallucination |
+| **Answer Relevancy** | **0.9749** | **100.0% (15/15 passed)** | 🎉 High User Query Alignment |
+| **Contextual Relevancy** | **0.5508** | **13.3% (2/15 passed)** | ⚠️ Penalizes conversational lecture noise |
+
 ---
 
 ## ⭐ Key Technical Features & Optimizations
@@ -90,14 +110,17 @@ Evaluated in component isolation on known-good golden contexts using `ChatMistra
    - Employs strict system prompts instructing the model to answer *only* from context and abstain when context is insufficient.
    - Supports both non-streaming (`generate()`) and token-by-token streaming (`generate_stream()`) outputs.
 
-3. **Apple Silicon (Mac M2) Hardware Safety**:
+3. **End-to-End RAG Orchestrator (`RagPipeline`)**:
+   - Combines two-stage retrieval and Mistral generation into a unified `invoke(query)` interface returning structured `RagResult` dictionaries containing `query`, `answer`, and `context`.
+
+4. **Apple Silicon (Mac M2) Hardware Safety**:
    - Caps PyTorch CPU thread usage (`torch.set_num_threads(4)`) and sets batch encoding size (`batch_size = 32`) to prevent CPU thread starvation and system freezing during heavy embedding tasks.
 
-4. **Robust LLM Judge & Multi-Block JSON Repair System**:
+5. **Robust LLM Judge & Multi-Block JSON Repair System**:
    - Custom `MistralLLM` class extending DeepEval's `DeepEvalBaseLLM`.
    - Advanced `clean_json_output()` sanitizer featuring markdown fence stripping, bracket/brace stack extraction (`{...}` and `[...]`), and multi-block JSON array merging to handle open-source LLM formatting quirks.
 
-5. **Synthetic Golden Generation**:
+6. **Synthetic Golden Generation**:
    - Automated creation of synthetic test cases using DeepEval's `Synthesizer` with evolution strategies (`Goldens/generate_goldens.py`).
 
 ---
@@ -113,6 +136,7 @@ Evaluated in component isolation on known-good golden contexts using `ChatMistra
 ├── Evals/                            # Evaluation harness & execution
 │   ├── eval_retriever.py            # Retriever evaluation suite (Precision & Recall)
 │   ├── eval_generator.py            # Generator evaluation suite (Faithfulness & Relevancy)
+│   ├── eval_rag_pipeline.py         # End-to-End RAG Triad suite (Faithfulness, Relevancy, Contextual Relevancy)
 │   └── harness.py                   # Metric summarization & reporting utilities
 ├── Goldens/                          # Reference and synthetic golden datasets
 │   ├── retriever_goldens.json       # 15 human-authored retriever goldens
@@ -122,7 +146,8 @@ Evaluated in component isolation on known-good golden contexts using `ChatMistra
 ├── src/                              # Core RAG implementation
 │   ├── retriever.py                 # Ingestion, VTT parser, Chroma vector store
 │   ├── reranker.py                  # Two-stage Cross-Encoder reranker
-│   └── generator.py                 # Grounded Mistral LLM generator & streaming
+│   ├── generator.py                 # Grounded Mistral LLM generator & streaming
+│   └── rag_pipeline.py              # End-to-end RAG pipeline class
 ├── chroma_store/                     # Local persisted ChromaDB store
 ├── pyproject.toml                    # Dependencies (uv / pyproject configuration)
 └── README.md                         # Project documentation
@@ -166,21 +191,32 @@ Test the Mistral generator (streaming & non-streaming):
 PYTHONPATH=. uv run python src/generator.py
 ```
 
+Test end-to-end RAG pipeline sample query:
+```bash
+PYTHONPATH=. uv run python src/rag_pipeline.py
+```
+
 ---
 
 ## 🧪 Running Evaluations
 
-### Run Generator Evaluation Suite (Faithfulness & Relevancy)
+### 1. Run End-to-End RAG Pipeline Evaluation (RAG Triad)
+Execute full pipeline evaluation for Faithfulness, Answer Relevancy, and Contextual Relevancy:
+```bash
+PYTHONPATH=. uv run python Evals/eval_rag_pipeline.py
+```
+
+### 2. Run Generator Evaluation Suite (Faithfulness & Relevancy)
 ```bash
 PYTHONPATH=. uv run python Evals/eval_generator.py
 ```
 
-### Run Two-Stage Reranked Retriever Evaluation (Recall & Precision)
+### 3. Run Two-Stage Reranked Retriever Evaluation (Recall & Precision)
 ```bash
 PYTHONPATH=. uv run python Evals/eval_retriever.py --rerank
 ```
 
-### Run Baseline Retrieval (Single-Stage Vector Search)
+### 4. Run Baseline Retrieval (Single-Stage Vector Search)
 ```bash
 PYTHONPATH=. uv run python Evals/eval_retriever.py
 ```
