@@ -33,6 +33,13 @@ def clean_json_output(res: str) -> str:
         return res
     res = res.strip()
 
+    # 1. Remove markdown code fences if present (e.g., ```json ... ```)
+    if "```" in res:
+        fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", res, re.DOTALL | re.IGNORECASE)
+        if fence_match:
+            res = fence_match.group(1).strip()
+
+    # 2. Try direct json_repair parse
     try:
         parsed = repair_json(res, return_objects=True)
         if isinstance(parsed, dict):
@@ -51,28 +58,45 @@ def clean_json_output(res: str) -> str:
     except Exception:
         pass
 
-    # Extract first complete `{ ... }` JSON object using brace stack tracking
-    first_b = res.find("{")
-    if first_b != -1:
+    # 3. Extract JSON array [...] or JSON object {...} using bracket stack tracking
+    first_brace = res.find("{")
+    first_bracket = res.find("[")
+
+    start_idx = -1
+    open_char, close_char = None, None
+
+    if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+        start_idx = first_brace
+        open_char, close_char = "{", "}"
+    elif first_bracket != -1:
+        start_idx = first_bracket
+        open_char, close_char = "[", "]"
+
+    if start_idx != -1:
         stack = 0
-        end_b = -1
-        for i in range(first_b, len(res)):
-            if res[i] == "{":
+        end_idx = -1
+        for i in range(start_idx, len(res)):
+            if res[i] == open_char:
                 stack += 1
-            elif res[i] == "}":
+            elif res[i] == close_char:
                 stack -= 1
                 if stack == 0:
-                    end_b = i
+                    end_idx = i
                     break
-        if end_b != -1:
-            res = res[first_b:end_b + 1]
-
-    try:
-        parsed = repair_json(res, return_objects=True)
-        if isinstance(parsed, (dict, list)):
-            return json.dumps(parsed)
-    except Exception:
-        pass
+        if end_idx != -1:
+            extracted = res[start_idx:end_idx + 1]
+            try:
+                parsed = repair_json(extracted, return_objects=True)
+                if isinstance(parsed, (dict, list)):
+                    if isinstance(parsed, dict) and "verdict" in parsed and "reason" not in parsed:
+                        parsed["reason"] = "N/A"
+                    elif isinstance(parsed, list):
+                        for item in parsed:
+                            if isinstance(item, dict) and "verdict" in item and "reason" not in item:
+                                item["reason"] = "N/A"
+                    return json.dumps(parsed)
+            except Exception:
+                pass
 
     return res
 
