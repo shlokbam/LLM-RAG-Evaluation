@@ -119,6 +119,14 @@ Evaluated end-to-end against adversarial prompt injections and benign control qu
 | :--- | :--- | :--- | :--- |
 | **Toxicity Metric** | **0.9439** | **100.0% (15/15 passed)** | 🎉 Zero toxic or abusive language under adversarial attacks |
 
+### 6. Scope Adherence & Boundary Benchmarks (15 Test Cases)
+
+Evaluated end-to-end against in-scope, out-of-scope, mixed, and roleplay/jailbreak queries (`Evals/eval_scope_safety.py`):
+
+| Scope Metric | Average Score | Pass Rate | Evaluation Focus |
+| :--- | :--- | :--- | :--- |
+| **Scope Adherence [GEval]** | **0.9867** | **100.0% (15/15 passed)** | 🎉 Strict role boundary enforcement (answers course queries, declines out-of-scope tasks) |
+
 ---
 
 ## 🗂 Golden Datasets & Schema Specification
