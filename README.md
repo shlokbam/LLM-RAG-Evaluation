@@ -44,7 +44,7 @@ flowchart TD
         GeneratorComponent --> FinalOutput["RagResult (Query, Answer, Context)"]
     end
 
-    subgraph DeepEvalHarness ["5. DeepEval Evaluation Suite"]
+    subgraph DeepEvalHarness ["5. DeepEval & Operational Evaluation Suite"]
         TopK --> RetCases["Retriever Test Cases"]
         RetCases --> Recall["Contextual Recall Metric (0.70)"]
         RetCases --> Precision["Contextual Precision Metric (0.70)"]
@@ -59,10 +59,12 @@ flowchart TD
         PipelineCases --> Toxicity["Toxicity Metric (threshold=0.30)"]
         PipelineCases --> Leakage["Leakage Metrics: Prompt, Content & PII"]
         PipelineCases --> Scope["Scope Adherence GEval (threshold=0.70)"]
+        PipelineCases --> OpsEvals["Operational Suite: Cost, Latency & Reliability"]
 
         Recall & Precision & Faithfulness & Relevancy & CtxRelevancy & GEvalApp & Toxicity & Leakage & Scope --> MistralJudge["Judge Model: MistralLLM (open-mistral-7b)"]
         MistralJudge --> JSONRepair["clean_json_output (Bracket Stack + json_repair)"]
         JSONRepair --> Report["📊 Evaluation Summary Reports"]
+        OpsEvals --> Report
     end
 ```
 
@@ -126,6 +128,50 @@ Evaluated end-to-end against in-scope, out-of-scope, mixed, and roleplay/jailbre
 | Scope Metric | Average Score | Pass Rate | Evaluation Focus |
 | :--- | :--- | :--- | :--- |
 | **Scope Adherence [GEval]** | **0.9867** | **100.0% (15/15 passed)** | 🎉 Strict role boundary enforcement (answers course queries, declines out-of-scope tasks) |
+
+### 7. Data & System Leakage Benchmarks (15 Test Cases)
+
+Evaluated end-to-end against System Prompt Leakage, Course Corpus Dumping, and PII Exposure (`Evals/eval_leakage.py`):
+
+| Leakage Metric | Average Score | Pass Rate | Evaluation Focus |
+| :--- | :--- | :--- | :--- |
+| **Prompt Leakage [GEval]** | **1.0000** | **100.0% (5/5 passed)** | 🎉 Zero system prompt or internal instruction exposure |
+| **Course Content Leakage [GEval]** | **1.0000** | **100.0% (5/5 passed)** | 🎉 Zero raw corpus verbatim dumping or extraction |
+| **PII Leakage Metric** | **1.0000** | **100.0% (5/5 passed)** | 🎉 Zero exposure of sensitive personal/credential data |
+
+### 8. Operational Cost Benchmarks (`Evals/eval_cost.py`)
+
+Evaluated by derived per-token pricing using official `open-mistral-7b` rates ($0.25 / 1M input & output tokens):
+
+| Cost Metric / Variable | Measured Value | Budget / Target SLO | Status |
+| :--- | :--- | :--- | :--- |
+| **Avg Cost per Query** | **$0.000666** (₹0.0586) | $\le \$0.001500$ / query | 🎉 **PASS** |
+| **Token Split (In / Out)** | **1,803 In / 863 Out** | 68% Input / 32% Output | — |
+| **Daily Projection (2,000 queries/day)** | **$1.33 / day** (₹117.29) | Economic Feasibility | 🎉 **PASS** |
+| **Monthly Projection (2,000 queries/day)** | **$39.98 / month** (₹3,518.57) | Budget Alignment | 🎉 **PASS** |
+
+### 9. Operational Latency & TTFT Benchmarks (`Evals/eval_latency.py`)
+
+Deterministic timing metrics collected over 20 end-to-end runs (`QUESTIONS × 5 repeats`) with streaming TTFT enabled:
+
+| Pipeline Stage | Mean (ms) | P50 (ms) | P95 (ms) | P99 (ms) | Target SLO (P95) | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **End-to-End Latency** | 12,700.7 ms | 12,388.5 ms | **18,383.5 ms** | 19,077.0 ms | $\le 3,000$ ms | ⚠️ **FAIL** |
+| **Perceived TTFT (First Token)** | 5,556.9 ms | 5,369.9 ms | **7,870.1 ms** | 8,035.9 ms | $\le 1,200$ ms | ⚠️ **FAIL** |
+| **Retrieval Stage (Bi-Encoder + Rerank)** | 4,981.9 ms | 4,805.8 ms | 7,287.3 ms | 7,334.6 ms | Stage Breakdown | — |
+| **Generation Stage (Mistral 7B)** | 7,718.6 ms | 6,799.4 ms | 12,780.3 ms | 13,433.5 ms | Stage Breakdown | — |
+
+> **Note**: Average output length was 3,517 characters (~863 tokens). The latency bottleneck is driven primarily by two-stage cross-encoder reranking over 23 candidate chunks (~4.98s retrieval) and generation output length (~7.71s generation).
+
+### 10. Operational Reliability Benchmarks (`Evals/eval_reliability.py`)
+
+Measured request stability and fault tolerance over 20 consecutive pipeline invocations with exponential backoff retries:
+
+| Metric | Measured Score | Standard Target | Status |
+| :--- | :--- | :--- | :--- |
+| **Success Rate** | **100.00% (20/20)** | $\ge 99.0\%$ | 🎉 **PASS** |
+| **Error Rate** | **0.00% (0/20)** | $\le 1.0\%$ | 🎉 **PASS** |
+| **Retry Rate** | **0.00% (0/20)** | $\le 5.0\%$ | 🎉 **PASS** |
 
 ---
 
@@ -326,6 +372,9 @@ class MistralLLM(DeepEvalBaseLLM):
 │   ├── eval_toxicity.py             # Toxicity evaluation suite (DeepEval ToxicityMetric)
 │   ├── eval_leakage.py              # Data & System Leakage suite (Prompt, Content, PII)
 │   ├── eval_scope_safety.py         # Scope Adherence suite (Role & Boundary Safety)
+│   ├── eval_cost.py                 # Operational Cost evaluation (Derived per-token pricing)
+│   ├── eval_latency.py              # Operational Latency & TTFT evaluation (Percentiles & SLOs)
+│   ├── eval_reliability.py          # Operational Reliability evaluation (Success/Error/Retry rates)
 │   └── harness.py                   # Metric summarization & reporting utilities
 ├── Goldens/                          # Reference and synthetic golden datasets
 │   ├── retriever_goldens.json       # 15 human-authored retriever goldens
@@ -417,23 +466,41 @@ Execute toxicity evaluation on pipeline output using `ToxicityMetric`:
 PYTHONPATH=. uv run python Evals/eval_toxicity.py
 ```
 
-### 5. Run End-to-End RAG Pipeline Evaluation (RAG Triad)
+### 5. Run Operational Cost Benchmark
+Calculate derived token usage costs and business projections against budget SLO:
+```bash
+PYTHONPATH=. uv run python Evals/eval_cost.py
+```
+
+### 6. Run Operational Latency & TTFT Benchmark
+Measure end-to-end latency, perceived time-to-first-token, and stage breakdowns:
+```bash
+PYTHONPATH=. uv run python Evals/eval_latency.py
+```
+
+### 7. Run Operational Reliability Benchmark
+Evaluate pipeline request success rate, error rate, and retry resilience:
+```bash
+PYTHONPATH=. uv run python Evals/eval_reliability.py
+```
+
+### 8. Run End-to-End RAG Pipeline Evaluation (RAG Triad)
 Execute full pipeline evaluation for Faithfulness, Answer Relevancy, and Contextual Relevancy:
 ```bash
 PYTHONPATH=. uv run python Evals/eval_rag_pipeline.py
 ```
 
-### 6. Run Generator Evaluation Suite (Faithfulness & Relevancy)
+### 9. Run Generator Evaluation Suite (Faithfulness & Relevancy)
 ```bash
 PYTHONPATH=. uv run python Evals/eval_generator.py
 ```
 
-### 7. Run Two-Stage Reranked Retriever Evaluation (Recall & Precision)
+### 10. Run Two-Stage Reranked Retriever Evaluation (Recall & Precision)
 ```bash
 PYTHONPATH=. uv run python Evals/eval_retriever.py --rerank
 ```
 
-### 8. Run Baseline Retrieval (Single-Stage Vector Search)
+### 11. Run Baseline Retrieval (Single-Stage Vector Search)
 ```bash
 PYTHONPATH=. uv run python Evals/eval_retriever.py
 ```
