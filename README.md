@@ -372,9 +372,14 @@ class MistralLLM(DeepEvalBaseLLM):
 │   ├── eval_toxicity.py             # Toxicity evaluation suite (DeepEval ToxicityMetric)
 │   ├── eval_leakage.py              # Data & System Leakage suite (Prompt, Content, PII)
 │   ├── eval_scope_safety.py         # Scope Adherence suite (Role & Boundary Safety)
+│   ├── eval_safety.py               # Unified Safety suite runner (Toxicity, Scope, Leakage)
 │   ├── eval_cost.py                 # Operational Cost evaluation (Derived per-token pricing)
 │   ├── eval_latency.py              # Operational Latency & TTFT evaluation (Percentiles & SLOs)
 │   ├── eval_reliability.py          # Operational Reliability evaluation (Success/Error/Retry rates)
+│   ├── eval_ops.py                  # Unified Operational suite runner (Cost, Latency, Reliability)
+│   ├── metric_registry.py           # Metric rules, direction, gates, and Mistral tolerances
+│   ├── run_suite.py                 # Full suite orchestrator & baseline/candidate snapshot generator
+│   ├── compare.py                   # Regression testing decision engine & CI gate
 │   └── harness.py                   # Metric summarization & reporting utilities
 ├── Goldens/                          # Reference and synthetic golden datasets
 │   ├── retriever_goldens.json       # 15 human-authored retriever goldens
@@ -503,6 +508,27 @@ PYTHONPATH=. uv run python Evals/eval_retriever.py --rerank
 ### 11. Run Baseline Retrieval (Single-Stage Vector Search)
 ```bash
 PYTHONPATH=. uv run python Evals/eval_retriever.py
+```
+
+### 12. Run Full Suite Snapshot & Regression Comparison (CI Gate)
+
+Run the entire end-to-end suite across all quality, safety, and operational evaluations to generate a candidate snapshot:
+```bash
+PYTHONPATH=. uv run python -m Evals.run_suite --label "Candidate Run"
+```
+
+Save or bless a reference run as the baseline:
+```bash
+PYTHONPATH=. uv run python -m Evals.run_suite --baseline --label "Production Mistral Baseline"
+```
+
+Compare baseline vs. candidate snapshots to evaluate regressions against gates and guardrails:
+```bash
+PYTHONPATH=. uv run python -m Evals.compare
+```
+Pass `--all` to inspect secondary/informational metrics alongside gated metrics:
+```bash
+PYTHONPATH=. uv run python -m Evals.compare --all
 ```
 
 ---
