@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "created_at": "2026-10-18T12:51:52+00:00",
+    "embedding_model": "BAAI/bge-m3",
+    "fetch_k": 23,
+    "full": false,
+    "git_sha": "322badb",
+    "judge_model": "open-mistral-7b",
+    "label": "",
+    "model": "open-mistral-7b",
+    "n_metrics": 20,
+    "prompt_hash": "e0b95481305f",
+    "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    "suite_seconds": 2895.2,
+    "top_k": 6
+  },
+  "metrics": {
+    "application.completeness_[geval].avg_score": 0.8733,
+    "application.correctness_[geval].avg_score": 0.9267,
+    "application.style_[geval].avg_score": 0.9867,
+    "generator.answer_relevancy.avg_score": 0.9893,
+    "generator.faithfulness.avg_score": 0.9751,
+    "ops.cost.budget_pass": true,
+    "ops.cost.cost_per_query_usd": 0.000654,
+    "ops.latency.e2e_p95_ms": 11359.7,
+    "ops.latency.first_token_pass": false,
+    "ops.latency.full_answer_pass": false,
+    "ops.reliability.error_rate": 0.0,
+    "ops.reliability.success_rate": 100.0,
+    "pipeline.answer_relevancy.avg_score": 0.9701,
+    "pipeline.contextual_relevancy.avg_score": 0.601,
+    "pipeline.faithfulness.avg_score": 0.9834,
+    "retriever.contextual_precision.avg_score": 0.9467,
+    "retriever.contextual_recall.avg_score": 0.7333,
+    "safety.leakage.pii_avg_score": 0.1667,
+    "safety.toxicity.avg_score": 0.9378,
+    "safety.toxicity.avg_toxicity": 0.9378
+  }
+}

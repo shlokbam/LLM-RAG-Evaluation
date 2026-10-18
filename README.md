@@ -173,6 +173,43 @@ Measured request stability and fault tolerance over 20 consecutive pipeline invo
 | **Error Rate** | **0.00% (0/20)** | $\le 1.0\%$ | 🎉 **PASS** |
 | **Retry Rate** | **0.00% (0/20)** | $\le 5.0\%$ | 🎉 **PASS** |
 
+### 11. Full Suite Regression Testing Snapshot (`baselines/candidate.json`)
+
+Evaluated end-to-end across all 20 gated and guardrailed metrics using the unified orchestrator (`Evals/run_suite.py`). Built on a single pipeline instance with `open-mistral-7b`:
+
+| Suite Metadata | Configuration / Value |
+| :--- | :--- |
+| **Generator Model** | `open-mistral-7b` (`temperature=0`) |
+| **Judge Model** | `open-mistral-7b` (`MistralLLM` + `clean_json_output`) |
+| **Embedding & Reranker** | `BAAI/bge-m3` + `ms-marco-MiniLM-L-6-v2` (`top_k=6`, `fetch_k=23`) |
+| **Git Commit & Prompt Hash** | `322badb` / `e0b95481305f` |
+| **Total Execution Time** | 2,895.2s (~48.2 min) across 20 tracked metrics |
+
+#### Candidate Snapshot Metric Results:
+
+| Metric Category | Dotted Metric ID | Score / Value | Target / Classification | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Retriever** | `retriever.contextual_precision.avg_score` | **0.9467** | Quality Guardrail ($\ge 0.70$) | 🎉 **PASS** |
+| **Retriever** | `retriever.contextual_recall.avg_score` | **0.7333** | Quality Guardrail ($\ge 0.70$) | 🎉 **PASS** |
+| **Generator** | `generator.faithfulness.avg_score` | **0.9751** | Quality Guardrail ($\ge 0.70$) | 🎉 **PASS** |
+| **Generator** | `generator.answer_relevancy.avg_score` | **0.9893** | Quality Guardrail ($\ge 0.70$) | 🎉 **PASS** |
+| **Pipeline (Triad)** | `pipeline.faithfulness.avg_score` | **0.9834** | Quality Guardrail ($\ge 0.70$) | 🎉 **PASS** |
+| **Pipeline (Triad)** | `pipeline.answer_relevancy.avg_score` | **0.9701** | Quality Guardrail ($\ge 0.70$) | 🎉 **PASS** |
+| **Pipeline (Triad)** | `pipeline.contextual_relevancy.avg_score` | **0.6010** | Quality Guardrail ($\ge 0.70$) | ⚠️ *Conversational Noise* |
+| **Application** | `application.correctness_[geval].avg_score` | **0.9267** | Quality Guardrail ($\ge 0.70$) | 🎉 **PASS** |
+| **Application** | `application.completeness_[geval].avg_score` | **0.8733** | Quality Guardrail ($\ge 0.70$) | 🎉 **PASS** |
+| **Application** | `application.style_[geval].avg_score` | **0.9867** | Quality Guardrail ($\ge 0.70$) | 🎉 **PASS** |
+| **Safety** | `safety.toxicity.avg_score` | **0.9378** | Safety Gate ($\le 0.30$) | 🎉 **PASS** |
+| **Safety** | `safety.toxicity.avg_toxicity` | **0.9378** | Safety Gate (normalized) | 🎉 **PASS** |
+| **Safety** | `safety.leakage.pii_avg_score` | **0.1667** | Safety Gate (PII Leakage) | ⚠️ *Gate Evaluation* |
+| **Operations: Cost** | `ops.cost.cost_per_query_usd` | **$0.000654** | Cost Guardrail ($\le \$0.001500$) | 🎉 **PASS** |
+| **Operations: Cost** | `ops.cost.budget_pass` | **True** | Budget SLO Boolean | 🎉 **PASS** |
+| **Operations: Latency** | `ops.latency.e2e_p95_ms` | **11,359.7 ms** | Latency Guardrail ($\le 3,000$ ms) | ⚠️ **FAIL** |
+| **Operations: Latency** | `ops.latency.full_answer_pass` | **False** | Latency SLO Boolean | ⚠️ **FAIL** |
+| **Operations: Latency** | `ops.latency.first_token_pass` | **False** | TTFT SLO Boolean ($\le 1,200$ ms) | ⚠️ **FAIL** |
+| **Operations: Reliability** | `ops.reliability.success_rate` | **100.00%** | Reliability Guardrail ($\ge 99.0\%$) | 🎉 **PASS** |
+| **Operations: Reliability** | `ops.reliability.error_rate` | **0.00%** | Reliability Guardrail ($\le 1.0\%$) | 🎉 **PASS** |
+
 ---
 
 ## 🗂 Golden Datasets & Schema Specification
@@ -395,6 +432,9 @@ class MistralLLM(DeepEvalBaseLLM):
 │   ├── reranker.py                  # Two-stage Cross-Encoder reranker
 │   ├── generator.py                 # Grounded Mistral LLM generator & streaming
 │   └── rag_pipeline.py              # End-to-end RAG pipeline class
+├── baselines/                        # Evaluation snapshots for regression testing
+│   ├── baseline.json                # Production reference snapshot
+│   └── candidate.json               # Current candidate evaluation snapshot
 ├── chroma_store/                     # Local persisted ChromaDB store
 ├── pyproject.toml                    # Dependencies (uv / pyproject configuration)
 └── README.md                         # Project documentation
